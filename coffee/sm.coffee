@@ -2,11 +2,9 @@ appView = Backbone.View.extend
   tagname: 'div'
   id: 'main'
   render: () ->
-    source = $('#main-template').html()
-    template = Handlebars.compile source
     context =
       heading: 'test'
-    html = template context
+    html = Handlebars.templates.main context
     this.$el.html html
     return this
 
