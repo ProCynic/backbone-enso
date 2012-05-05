@@ -1,25 +1,39 @@
 Model_Enso = Backbone.Model.extend
   validate: (attrs) ->
     schema = @constructor.schema
-    #existance of attributes check
-    return k + 'is required' for k in _.keys(schema) when not schema[k].required is 'false' and not attrs[k]?
-
-    #type of attributes check
     primitives = ['string', 'function', 'object', 'number', 'boolean']
     for k in _.keys(schema)
-      if schema[k].type in primitives
-        return 'type mismatch: ' + k if typeof attrs[k] isnt schema[k].type
+      if not attrs[k]?
+        return 'required: ' + k if not schema[k].optional
       else
-        return 'type mismatch: ' + k if not (attrs[k] instanceof (eval schema[k].type)) #TODO something other than eval
+        if schema[k].type in primitives
+          return 'type mismatch: ' + k if typeof attrs[k] isnt schema[k].type
+        else
+          return 'type mismatch: ' + k if not (attrs[k] instanceof (eval schema[k].type)) #TODO something other than eval
+          if attrs[k] instanceof Backbone.Model
+            v = attrs[k].validate(attrs[k].attributes)
+            return v if v?
 
 # ------
 # Models
 # ------
 
-Book = Model_Enso.extend {},
+
+Author = Model_Enso.extend {},
+  schema:
+    name:
+      type: 'string'
+
+Book = Model_Enso.extend
+  validate: (attrs) ->
+    s = Model_Enso.prototype.validate.call(this, attrs)
+    return s if s?
+    # non-schema related validation.  Don't even bother to override validate if you don't have any
+,
   schema:
     author:
-      type: 'string'
+      type: 'Author'
+      optional: true
 
 Machine = Backbone.Model.extend
   validate: (attrs) ->
@@ -85,7 +99,9 @@ appView = Backbone.View.extend
   tagname: 'div'
   id: 'main'
   render: () ->
-    b = new Book({author: 'bob'})
+    bob = new Author {name: 'bob bobington'}
+    x = new Machine()
+    b = new Book {author: bob}
     context =
       heading: new String b.isValid()
     html = Handlebars.templates.main context
