@@ -25,11 +25,11 @@ Model_Enso = Backbone.Model.extend
 
         # inverse
         if schema[k].inverse?
-          return 'primitives can\'t have inverses' + k if not (schema[k].type instanceof Backbone.Model or schema[k].type instanceof Backbone.Collection)
+          return 'primitives can\'t have inverses: ' + schema[k].type if not (attrs[k] instanceof Backbone.Model or attrs[k] instanceof Backbone.Collection)
           othertype = eval schema[k].type #This is the type of the object that containse the inverse field
-          othertype = othertype.model if othertype instanceof Backbone.Collection #make it the actual model type if it's a collection
+          othertype = attrs[k].model if attrs[k] instanceof Backbone.Collection #make it the actual model type if it's a collection
           #other is now the Model object that contains the inverse attribute
-          inverse = othertype.constructor.schema[schema[k].inverse] #inverse is the field in the othertype SCHEMA
+          inverse = othertype.schema[schema[k].inverse] #inverse is the field in the othertype SCHEMA
           return 'bad inverse: ' + k if not inverse? or inverse.inverse isnt k #inverse must be reciprocal
           this_side = attrs[k] # the field in the actual instance on this side
           other_side = this_side.get schema[k].inverse # the field in the other object
@@ -74,8 +74,10 @@ Machine = Model_Enso.extend
   schema:
     start:
       type: 'State'
+      optional: true
     current:
       type: 'State'
+      optional: true
     states:
       type: 'States'
       inverse: 'machine'
@@ -91,6 +93,9 @@ State = Model_Enso.extend {},
       type: 'Transitions'
     in:
       type: 'Transitions'
+  grammar:
+    name: 'string'
+    transitions: 'Transition*'
 
 Transition = Model_Enso.extend {},
   schema:
@@ -122,21 +127,21 @@ appView = Backbone.View.extend
   tagname: 'div'
   id: 'main'
   render: () ->
-    m = new Machine()
+    ss = new States()
+    m = new Machine({states: ss})
     ts = new Transitions()
     s = new State
       name: 'blah'
       machine: m
       out: ts
       int: ts
-    ss = new States()
     ss.add s
     x = m.set
       start: s
       states: ss
 
     context =
-      heading: new String x
+      heading: new String m.isValid()
     html = Handlebars.templates.main context
     @$el.html html
     return this
