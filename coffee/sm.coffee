@@ -122,11 +122,21 @@ appView = Backbone.View.extend
   tagname: 'div'
   id: 'main'
   render: () ->
-    bob = new Author {name: 'bob'}
-    x = new Machine()
-    b = new Book {author: bob}
+    m = new Machine()
+    ts = new Transitions()
+    s = new State
+      name: 'blah'
+      machine: m
+      out: ts
+      int: ts
+    ss = new States()
+    ss.add s
+    x = m.set
+      start: s
+      states: ss
+
     context =
-      heading: new String b.isValid()
+      heading: new String x
     html = Handlebars.templates.main context
     @$el.html html
     return this
