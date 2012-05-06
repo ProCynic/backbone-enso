@@ -1,3 +1,12 @@
+typematch = (obj, str) ->
+  primitives = ['string', 'function', 'object', 'number', 'boolean']
+  return typeof obj is str if str in primitives
+  return _.isArray(obj) if str is 'array'
+  try
+    return obj instanceof (eval str)
+  catch err
+    return false
+
 Model_Enso = Backbone.Model.extend
   validate: (attrs) ->
     schema = @constructor.schema
@@ -6,13 +15,36 @@ Model_Enso = Backbone.Model.extend
       if not attrs[k]?
         return 'required: ' + k if not schema[k].optional
       else
-        if schema[k].type in primitives
-          return 'type mismatch: ' + k if typeof attrs[k] isnt schema[k].type
-        else
-          return 'type mismatch: ' + k if not (attrs[k] instanceof (eval schema[k].type)) #TODO something other than eval
-          if attrs[k] instanceof Backbone.Model
-            v = attrs[k].validate(attrs[k].attributes)
-            return v if v?
+        # typecheck
+        return 'type mismatch: ' + k if not typematch attrs[k], schema[k].type
+
+        # propigate validation
+        if attrs[k] instanceof Backbone.Model
+          v = attrs[k].validate(attrs[k].attributes)
+          return v if v?
+
+        # inverse
+        if schema[k].inverse?
+          return 'primitives can\'t have inverses' + k if not (schema[k].type instanceof Backbone.Model or schema[k].type instanceof Backbone.Collection)
+          othertype = eval schema[k].type #This is the type of the object that containse the inverse field
+          othertype = othertype.model if othertype instanceof Backbone.Collection #make it the actual model type if it's a collection
+          #other is now the Model object that contains the inverse attribute
+          inverse = othertype.constructor.schema[schema[k].inverse] #inverse is the field in the othertype SCHEMA
+          return 'bad inverse: ' + k if not inverse? or inverse.inverse isnt k #inverse must be reciprocal
+          this_side = attrs[k] # the field in the actual instance on this side
+          other_side = this_side.get schema[k].inverse # the field in the other object
+          x = this_side instanceof Backbone.Model
+          y = (eval inverse.type) instanceof Backbone.Model
+
+          if x and y # OneToOne
+            return 'not inverse' + k if other_side isnt this
+          #if not x and y # ManyToOne #check on other side
+
+          if x and not y #OneToMany
+            return 'not inverse' + k if not other_side.get(this.id)?
+          if not x and not y # ManyToMany
+            this_side.each (o) -> return 'not inverse' + k if o.get(schema[k].inverse) isnt this
+
 
 # ------
 # Models
@@ -35,51 +67,42 @@ Book = Model_Enso.extend
       type: 'Author'
       optional: true
 
-Machine = Backbone.Model.extend
-  validate: (attrs) ->
-    #start
-    return 'must have start state' if not (attrs.start instanceof State)
-
-    #states
-    return 'states must be a collection of states' if not (attrs.states instanceof States)
+Machine = Model_Enso.extend
+  initialize: () ->
+    @current = @start
 ,
   schema:
     start:
+      type: 'State'
+    current:
       type: 'State'
     states:
       type: 'States'
       inverse: 'machine'
 
-State = Backbone.Model.extend
-  validate: (attrs) ->
-    # machine
-    return 'must belong to a machine' if not (attrs.machine instanceof Machine)
+State = Model_Enso.extend {},
+  schema:
+    machine:
+      type: 'Machine'
+      inverse: 'states'
+    name:
+      type: 'string'
+    out:
+      type: 'Transitions'
+    in:
+      type: 'Transitions'
 
-    return 'state must belong to specified machine' if not attrs.machine.states.get(this.id)?
-
-    #name
-    return 'name must be a string' if attrs.name? and typeof attrs.name isnt 'string'
-
-    #out
-    return 'out must be a collection of transitions' if not (attrs.out instanceof Transitions)
-
-    #in
-    return 'in must be a collection of transitions' if not (attrs.in instanceof Transitions)
-
-Transition = Backbone.Model.extend
-  validate: (attrs) ->
-    #from
-    return 'from must be a state' if not (attrs.from instanceof State)
-
-    return 'out is the inverse of from' if not attrs.from.out.get(this.id)?
-
-    #to
-    return 'to must be a state' if not (attrs.to instanceof State)
-
-    return 'in is the inverse of to' if not attrs.to.in.get(this.id)?
-
-    #action
-    return 'action must be a function' if attrs.action? and typeof attrs.action isnt 'function'
+Transition = Model_Enso.extend {},
+  schema:
+    from:
+      type: 'State'
+      inverse: 'out'
+    to:
+      type: 'State'
+      inverse: 'in'
+    action:
+      type: 'function'
+      optional: true
 
 # -----------
 # Collections
@@ -99,7 +122,7 @@ appView = Backbone.View.extend
   tagname: 'div'
   id: 'main'
   render: () ->
-    bob = new Author {name: 'bob bobington'}
+    bob = new Author {name: 'bob'}
     x = new Machine()
     b = new Book {author: bob}
     context =

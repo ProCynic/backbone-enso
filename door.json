@@ -1,0 +1,24 @@
+{
+  start: 'Opened',
+  states: [
+    {
+      name: 'Opened'
+      transitions: [
+        'on close go Closed'
+      ]
+    },
+    {
+      name: 'Closed'
+      transitions: [
+        'on open go Opened',
+        'on lock go Locked'
+      ]
+    },
+    {
+      name: 'Locked'
+      transitions: [
+        'on unlock go Closed'
+      ]
+    }
+  ]
+}
