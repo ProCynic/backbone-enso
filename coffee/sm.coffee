@@ -1,3 +1,7 @@
+getValue = (object, prop) ->
+    return null if not object? and object[prop]?
+    return if _.isFunction(object[prop]) then object[prop]() else object[prop]
+
 typematch = (obj, str) ->
   primitives = ['string', 'function', 'object', 'number', 'boolean']
   return typeof obj is str if str in primitives
@@ -8,6 +12,26 @@ typematch = (obj, str) ->
     return false
 
 Model_Enso = Backbone.Model.extend
+  constructor: (attributes, options) ->
+    attributes = {} if not attributes?
+    attributes = @parse attributes if options? and options.parse?
+    defaults = getValue this, 'defaults'
+    attributes = _.extend {}, defaults, attributes if defaults?
+    @collection = options.collection if options? and options.collection?
+    @attributes = {}
+    @_escapedAttributes = {}
+    @cid = _.uniqueId 'c'
+    @changed = {}
+    @_silent = {}
+    @_pending = {}
+    @set attributes, {silent: true}
+    # Reset change tracking
+    @changed = {}
+    @_silent = {}
+    @_pending = {}
+    @_previousAttributes = _.clone @attributes
+    @initialize.apply this, arguments
+
   validate: (attrs) ->
     schema = @constructor.schema
     primitives = ['string', 'function', 'object', 'number', 'boolean']
@@ -38,13 +62,12 @@ Model_Enso = Backbone.Model.extend
 
           if x and y # OneToOne
             return 'not inverse' + k if other_side isnt this
-          #if not x and y # ManyToOne #check on other side
 
+          #if not x and y # ManyToOne #check on other side
           if x and not y #OneToMany
-            return 'not inverse' + k if not other_side.get(this.id)?
+            return 'not inverse' + k if not other_side.get(@id)?
           if not x and not y # ManyToMany
             this_side.each (o) -> return 'not inverse' + k if o.get(schema[k].inverse) isnt this
-
 
 # ------
 # Models
@@ -55,6 +78,8 @@ Author = Model_Enso.extend {},
   schema:
     name:
       type: 'string'
+  parse: (response) ->
+    return {name: 'bob'}
 
 Book = Model_Enso.extend
   validate: (attrs) ->
@@ -81,6 +106,7 @@ Machine = Model_Enso.extend
     states:
       type: 'States'
       inverse: 'machine'
+
 
 State = Model_Enso.extend {},
   schema:
@@ -127,21 +153,10 @@ appView = Backbone.View.extend
   tagname: 'div'
   id: 'main'
   render: () ->
-    ss = new States()
-    m = new Machine({states: ss})
-    ts = new Transitions()
-    s = new State
-      name: 'blah'
-      machine: m
-      out: ts
-      int: ts
-    ss.add s
-    x = m.set
-      start: s
-      states: ss
-
+    bob = new Author {name: 'joe'}
+    b = new Book {author: bob}
     context =
-      heading: new String m.isValid()
+      heading: bob.get 'name'
     html = Handlebars.templates.main context
     @$el.html html
     return this
